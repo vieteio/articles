@@ -201,5 +201,94 @@ $ℒ(id_{GPUn-b} \circ f_L \circ id_{b-1})=id_{b-1} \circ backward_L \circ id_{G
 
 $ℒ(T_c * bs/GPUn)=ℒ(T_b*bs/GPUn)$, where $T_b$ is the execution time of the backward step on the tensor $t$.
 
+##5. Functors for applying optimizations to LLM models
 
+### 5.1 Our approach
+A functor $𝓕$ is a mapping of objects and morphisms from one category to another (preserving commutative diagrams). It consists of a pair of mappings - for objects and for morphisms of a category.
 
+**Note.** In programming, objects represent data structures and morphisms represent operations on data. Clear context delineation and synchronous object update, i.e. data structures, and morphisms, i.e. operations on data, allows for a clear and compact description of complex transformations. The mathematical nature of a functor makes its application broad, overcoming the interface compatibility issue. For example, it bypasses the incompatibility of `nn.Sequential` and `nn.Module` interfaces in PyTorch, which are mathematically equivalent in the context of parallel pipeline optimization.
+
+A functor mapping can be viewed as a generation procedure that transforms the original categorical schema into a new one. Following that logic a functor in Viete is described as two generators, one for objects and the other for morphisms. A generator is a rewriting rule that replaces the object/morphism of the original category with one constructed using a function defined in decomposable mode. The generator's description includes an object or morphism of the original category as a context, accessible in the generator function for constructing the target category's object/morphism.
+
+The images below prototype the visual solution for describing a functor through two separate functions.
+
+![Generator](https://github.com/vieteio/articles/assets/800129/bc176445-2d69-4131-89f1-8dac8841eaf3)
+
+![Generator application result](https://github.com/vieteio/articles/assets/800129/a0db55ba-a5f5-4d81-847e-2f40eeb2832a)
+
+The generator can be applied to the categorical scheme through the "Set generator" option in the context menu, selecting the required generator from the list.
+
+An important aspect of functors in general and their proposed implementation in Viete is that the scheme built by the functor is drawn next to the original scheme and linked to it by dashed lines. Corresponding objects and morphisms from the original and target categories are connected by these lines.
+
+Changes in the original category interactively update the target category scheme. The target category also updates interactively when the functor's generators are updated.
+
+#### 5.1.1. Comparing functors to programming concepts
+Functors correspond to two tools in regular programming - code generation and metaprogramming.
+
+##### 5.1.1.1. Metaprogramming
+Metaprogramming is the addition of language syntax with tools, allowing the construction of various language primitives like functions or classes. Such tools exist in C/C++ and Scala. However, metaprogramming involves describing the construction code for a primitive, but the result construction itself (the created class or function) is not visible. The programmer must mentally model the construction behavior to understand the resulting primitive and then work with it. This leads to difficulties in refactoring if the construction code or input parameters change. 
+
+Today metaprogramming is considered an unsuccessful approach due to these complexities. The solution to the invisibility of construction is code generation.
+
+##### 5.1.1.2. Code generation
+In code generation, the project's code is parsed into AST, and new code is generated in separate files based on the AST. Created files can be opened and read, making it easier to work with the resulting functions and classes. When changing the source code, one must not forget to re-run the code generation. New classes and functions will be created, and the programmer faces the task of manually adapting the code to the updated classes and functions. Thus, the refactoring problem remains unresolved in code generation.
+
+##### 5.1.1.3. Functors
+
+Functors are similar to metaprogramming in that they are a natural part of a categorical language. However, the result of generation is visible, as in code generation. Since each object/morphism is connected by a dashed line to its original object/morphism, changes in the original category can be propagated to the target along these lines. This tool is implemented in Viete and is called smart refactoring.
+
+In the case of changes to the functor generator, conducting refactoring is more challenging. This direction is not yet developed in Viete, but the concept of natural transformation offers a theoretical solution for such cases.
+
+## 5.2. Functor for gradient checkpointing
+The functor $𝒢: 𝓜_{mem} \rightarrow 𝓜_{gch \textunderscore mem}$ for gradient checkpointing optimization translates block computation with saving all tensors into computation with saving only checkpoints and temporarily storing the last computed tensor $t$.
+
+Below is the scheme with the result of the proposed functor's generation
+
+<img width="1149" alt="Gradient checkpointing functor" src="https://github.com/vieteio/articles/assets/800129/92380c33-3a06-4f76-918b-011fa3f9b563">
+
+On the left scheme for clarity, identity morphisms and grouping morphisms ($∆$ and projections) are omitted.
+
+Mapping of objects by the functor 𝒢 is next: the computation state of the LLM model $x \times t^l = x \times t^{l-1} \times t$ generally transforms into a pair of objects $l$ and $x \times ch^k \times t$, where $k=⌊l/\sqrt{L}⌋$, and tensor $t$ is computed by morphism $f_l=f_i \circ pr_2 \circ ∆ \circ f_{k*\sqrt{L}}$, $i=l - k*\sqrt{L}$. If $l = k*\sqrt{L}$, then $x \times t^l$ is transformed into $x \times ch^k$. This logic in categorical form must be set in the object generator.
+
+**Note.** As agreed above, for simplicity, $L$ is such that $\sqrt{L}$ is an integer.
+
+Mapping of morphisms by the functor $𝒢$ is next: the morphism $f$ on the left scheme is transformed into the computation of a new tensor $t$ and if $l+1$ is a multiple of $\sqrt{L}$, saving this tensor as a checkpoint. A conditional construction with two outcomes is described using a pattern matching visual element (co-product in category theory). This logic in categorical form should be set in the morphism generator.
+
+### 5.3. Parallel pipeline
+
+In the LLM model scheme without optimizations, each morphism describes computations in a block for a full batch $x^{bs}$. To align this scheme with optimized computations, we need to  regroup the morphisms in the parallel pipeline scheme so that each morphism in it also corresponds to the computations in a block for the full batch $x^{bs}$.
+
+We construct morphisms for computing the full batch $x^{bs}$ in a group of $L/GPUn$ blocks loaded on one GPU. Numbering the batch parts sized $x^{bs/GPUn}$ from $1$ to $GPUn$, the computation morphism for the first group of blocks is composed as follows: for each batch part $b$, take the composition $id$ morphisms of idleness with the first morphism $f_{L/GPUn}$ for computation for that batch part. The result is a morphism $f_{L/GPUn} \circ id_{b-1}$, where $id_{b-1}$ is a composition of $b-1$ identity morphisms $id$. We add a duration morphism to show the time of idleness and computations corresponding to batch part $b$. This results in a Cartesian product of two morphisms: ($+b*L/GPUn * T_c *(bs/GPUn)$, $f_L/GPUn \circ id_{b-1}$). Accordingly, the batch part $b$ is now represented as a Cartesian product ($time$, $x^{bs/GPUn}$).
+
+<img width="1540" alt="Batch block first computation morphism" src="https://github.com/vieteio/articles/assets/800129/b45feeeb-e006-443a-afee-5e04c059ad2b">
+
+Combining these Cartesian products of morphisms and states for batch parts, we get a complex morphism and state for the whole batch. We also add the number of the GPU on which the block group is computed to the state.
+
+The complex morphism in the scheme above represents the computation of the full batch on the first group of $L/GPUn$ blocks. This corresponds to the morphism $f_{L/GPUn}$ in the scheme of the model $𝓜$ without optimizations. For block groups from $2$ to $GPUn-1$ inclusive, there will be no idleness in the computations. In the components of the complex morphism, there will be no identity morphism $id$.
+
+For the last group of blocks after computing $y$ for the first batch part, idleness will be added to wait for the completion of the last batch parts.
+
+<img width="1567" alt="Batch block last computation morphism" src="https://github.com/vieteio/articles/assets/800129/8bb61049-ad7b-424e-93ff-35035994ef35">
+
+We have described morphisms in a model with parallel pipeline optimization. They correspond to morphisms $f_{L/GPUn}$ for the respective block groups in the model $𝓜$ without optimizations. Now we can build the functor $𝒫$ for parallel pipeline, matching morphisms. The corresponding objects are also matched.
+
+<img width="1515" alt="Parallel pipeline functor" src="https://github.com/vieteio/articles/assets/800129/a2958575-6fab-41fd-a2a8-41cd72055791">
+
+A separate close-up view of the $𝓜_{pp \textunderscore groups}$ scheme for the models without optimizations with morphisms for block groups is provided.
+
+<img width="600" alt="Grouped model for parallel pipeline" src="https://github.com/vieteio/articles/assets/800129/abe41bba-b43e-43c0-9248-19abd6f54019">
+
+### 5.4. Applying multiple optimizations
+#### 5.4.1. Compatibility condition for gradient checkpointing and parallel pipeline
+
+In gradient checkpointing tensors between checkpoints are recomputed during the backpropagation stage. In parallel pipeline, computations during backpropagation go by groups of blocks distributed across GPUs. The optimal combination of gradient checkpoint and parallel pipeline will be achieved if all blocks between two checkpoints fall into one group, thus recomputation of tensors will not involve 2 or more GPUs. For a group sized $L/GPUn$ it should include exactly blocks numbered from $k*\sqrt{L} + 1$ to $(k+s) * \sqrt{L}$, where $s \in ℕ$, i.e. $L/GPUn=s*\sqrt{L}$.
+Then we can match the morphism $f_{s*\sqrt{L}}$, going from $k$-th checkpoint to the $(k+s)$-th, with morphism $f_{L/GPUn}$ in the parallel pipeline scheme.
+
+#### 5.4.2. Applying functors under compatibility conditions
+We visually align the LLM model scheme $𝓜_{gch}$ with a composition of $\sqrt{L}$ morphisms for gradient checkpointing and scheme $𝓜_{pp \textunderscore groups}$ with grouping of $L/GPUn$ morphisms for parallel pipeline. If the requirement $L/GPUn=s*\sqrt{L}$, where $s \in ℕ$, is met, we can construct the functor $𝒮: 𝓜_{gch} \rightarrow 𝓜_{pp \textunderscore groups}$. It is straightforward to describe using decomposable schemes for generators. Taking the composition $𝒫 \circ 𝒮$, we apply the parallel pipeline optimization on top of the gradient checkpointing optimization.
+
+<img width="351" alt="Grouped model for gradient checkpointing" src="https://github.com/vieteio/articles/assets/800129/643b20ef-bcd4-4b97-b1c2-2369c6a50aa5">
+
+<img width="600" alt="Grouped model for parallel pipeline" src="https://github.com/vieteio/articles/assets/800129/abe41bba-b43e-43c0-9248-19abd6f54019">
+
+Applying two optimizations is achieved by describing a simple functor that chains morphisms and calling two functors.
