@@ -55,13 +55,13 @@ To describe models and functors in Viete, the decomposable mode is used, which a
 
 The categorical schemes presented in this and subsequent sections can be viewed in the Viete editor via this link: https://editor.viete.io/912c8bb6-1109-4c03-8025-8e9ac61b0f87.
 
-### 4.1 Neural network model
+### 4.1. Neural network model
 
 Let’s categorically describe a decoder-only LLM to build a functor into an optimized model. We consider an LLM as a neural network with sequentially arranged layers - this is sufficient for a high-level description of LLM models, as they consist of a sequence of Transformer (or Decoder) blocks. LLM contains parallel computing lines in Residual connections inside the Transformer block, but since we apply optimizations to the LLM blocks as black boxes, this does not affect our logic.
 
 We'll break down the categorical description of the LLM model using an example, and then give a description in the general case
 
-#### 4.1.1 Example
+#### 4.1.1. Example
 
 In the scheme below, the LLM model consists of 6 Transformer blocks. The neural network here is a function parameterized by weights, which takes an input tensor $x$ and returns an output tensor $y$. Categorically, we represent this function by the morphism $forward$ from the object x to the object y. This is the arrow labeled $forward$ on the left of the scheme. The architecture of LLM is the internal implementation of a function. We represent it as a decomposition of the morphism $forward$ into a chain of morphisms, corresponding to Transformer blocks - on the right of the scheme.
 
@@ -72,7 +72,53 @@ Objects in the chain are a pair (cartesian product) of the tensor t at the outpu
 
 Then the morphism in the chain should compute a new tensor and a block number $layer$. Therefore, we represent the morphism as a cartesian product of two morphisms: $+1$ and $f$. Here the morphism $f$ for each block $l$ corresponds to the function $f_{w_l}$. For brevity we omit the index $w_l$. We get different morphisms between different pairs of objects, but with the same label $f$. Similarly, for example, in the category Preorder, all morphisms are denoted with the same label $\leq$.
 
-#### 4.1.2 General scheme
+#### 4.1.2. General scheme
 
 Now let's describe the categorical scheme $𝓜$ for a model with an arbitrary number of layers. To do this, it is sufficient to describe the morphism of one block. We will do this and, for clarity, we will additionally show how the block arrows add up to the composition. The scheme is presented below. The Composition of several morphisms $+1$ from the tensor $x$ to $t$ - the output of the $l$ block - gives a morphism $+l$. For a tensor $y$, the morphism to the block number will be $+L$.
 ![General scheme](https://github.com/vieteio/articles/assets/800129/1c462574-e60c-43f2-9dc5-f69ff7d78467)
+
+### 4.2. Backward computation
+
+Gradient checkpointing and parallel pipeline are optimizations of the neural network training process. They affect both forward and backward learning steps. For the neural networks described above, only the forward step was detailed. In the paper “Backprop as Functor” https://arxiv.org/abs/1711.10455 the construction of the backprop step is derived from the forward step with the functor $ℒ: Para \Rightarrow Learn$. That is, we can obtain a backward computation scheme from a forward computation scheme by applying the functor.
+
+We can apply the optimization functor to our LLM model scheme $𝓜$ to obtain the scheme of forward optimized computations $𝓜_{opt}$. Applying the functor $ℒ$ to this scheme will allow us to get a complete scheme of neural network training with optimization. For each optimization, the functor for backward computation $ℒ$ must be extended to support the peculiarities of the computations. The corresponding extension is provided for each optimization where needed.
+
+### 4.3. Memory state during calculations
+
+Gradient checkpointing optimizes neural network execution in terms of memory. To demonstrate the optimization operation, we need to show how memory consumption changes during neural network execution.
+
+We describe categorically the computations during the operation of the neural network. The object in this category is the memory state before or after the computation of block $l$, with the morphism being the transition from one state to another during the computation of a block.
+
+Below is an example of a categorical scheme for a LLM with 6 blocks and a general scheme $𝓜_{mem}$ for a model with an arbitrary number of layers. The latter describes a morphism for a block with number $l$ and examples of the composition of a chain of block morphisms.
+
+<img width="355" alt="Example" src="https://github.com/vieteio/articles/assets/800129/7956071f-eddf-472c-9ac9-871808335ed0">
+<img width="463" alt="General scheme" src="https://github.com/vieteio/articles/assets/800129/51f86e9f-6173-4456-8787-0d90a2372b6a">
+
+Before the start of computations, only the input tensor $x$ is contained in memory. After the computation of the first block, the tensor $t$ at the output of this block is added to the state. After each next block one more tensor $t$ is added. The morphism $f_l$ with index $l$ means composition of $l$ block morphisms $f$ from the input tensor $x$ to the output of block number $l$.
+
+**Note.** The tensors at the output of the block are stored in memory for later use in backpropagation. Therefore, it is more accurate to say here that the tensor $t$ is not only the value computed by the block, but also all intermediate values computed inside the block, for example in the attention and MLP layers. In a typical implementation of the attention layer, three intermediate attention matrices are computed. The label $t$ here means not the same object as in the section above.
+
+General state at the block output $l$ is the Cartesian product $x \times t^l = x \times t^{l-1} \times t$. The morphism for block $l$ transitions from $x \times t^{l-2} \times t = x \times t^{l-1}$ to $x \times t^{l-1} \times t$. This morphism is the Cartesian product of the identity  morphism for $x$, combinations of morphisms that group $t^{l-2} \times t$ into $t^{l-1}$ and morphism $f$, which computes a new tensor $t$ in the product $t^{l-2} \times t.
+
+The complete scheme of this Cartesian product is as follows:
+
+<img width="372" alt="Scheme with group morphisms" src="https://github.com/vieteio/articles/assets/800129/957847a4-8d2f-419b-a0da-aa7c5bbad9a0">
+
+The tensor $t$ at the output of the previous block is copied by the morphism $∆$, then the projection $pr_1$ is saved for later use (in backpropagation), and the projection $pr_2$ passed $t$ for computation in block $l$.
+In the schemes for the neural network, the identity morphism and grouping morphisms are omitted for brevity and clarity, leaving only the computationally meaningful morphism $f$.
+
+#### 4.3.2.1. Functor $𝒰: 𝓜 \Rightarrow 𝓜_{mem}$
+
+The categorical scheme $𝓜_{mem}$ can be constructed from $𝓜$ using a functor $𝒰: 𝓜 \Rightarrow 𝓜_{mem}$ with the following transformations of objects and morphisms:
+
+$$ 𝒰_1(l \times t)=x \times t^{l-1} \times t $$
+
+$𝒰_2(+1 \times f)$ translates morphism from $𝓜$ into a diagram with groupings morphism as described above. Formally, this can be written as:
+
+$ 𝒰_2(+1 \times f)=1_x \times (1_{t^{l-2}} \times (pr_1 \circ ∆)) \times f \circ pr_2 \circ ∆ $. Recall that here $f$ is an abbreviation for f_{w_l}.
+
+The inverse functor $𝒰^{-1}$, operating from $𝓜$ to $𝓜_{mem}$, can also be considered.
+
+#### 4.3.2. Backpropagation
+
+During the backpropagation stage, gradients are computed using the tensors from the forward step. The gradient is computed as $g=backward(g_{previous}, t)$. Here $t$, from a categorical point of view, is a saved copy of the tensor that has been computed by the morphism $pr_1 \circ ∆ \circ f_l$. The functor $ℒ$, constructing the scheme of backward computations based on forward computations, should translate that computed tensor $t$ into the saved copy. Thus, the functor should translate the morphism $pr_2 \circ ∆ \circ f_l$ into morphism $pr_1 \circ ∆ \circ f_l$, $ℒ(pr_2 \circ ∆ \circ f_l)=pr_1 \circ ∆ \circ f_l$.
