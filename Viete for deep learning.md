@@ -79,7 +79,7 @@ Now let's describe the categorical scheme $𝓜$ for a model with an arbitrary n
 
 ### 4.2. Backward computation
 
-Gradient checkpointing and parallel pipeline are optimizations of the neural network training process. They affect both forward and backward learning steps. For the neural networks described above, only the forward step was detailed. In the paper “Backprop as Functor” https://arxiv.org/abs/1711.10455 the construction of the backprop step is derived from the forward step with the functor $ℒ: Para \Rightarrow Learn$. That is, we can obtain a backward computation scheme from a forward computation scheme by applying the functor.
+Gradient checkpointing and parallel pipeline are optimizations of the neural network training process. They affect both forward and backward learning steps. For the neural networks described above, only the forward step was detailed. In the paper “Backprop as Functor” https://arxiv.org/abs/1711.10455 the construction of the backprop step is derived from the forward step with the functor $ℒ: Para \rightarrow Learn$. That is, we can obtain a backward computation scheme from a forward computation scheme by applying the functor.
 
 We can apply the optimization functor to our LLM model scheme $𝓜$ to obtain the scheme of forward optimized computations $𝓜_{opt}$. Applying the functor $ℒ$ to this scheme will allow us to get a complete scheme of neural network training with optimization. For each optimization, the functor for backward computation $ℒ$ must be extended to support the peculiarities of the computations. The corresponding extension is provided for each optimization where needed.
 
@@ -107,11 +107,11 @@ The complete scheme of this Cartesian product is as follows:
 The tensor $t$ at the output of the previous block is copied by the morphism $∆$, then the projection $pr_1$ is saved for later use (in backpropagation), and the projection $pr_2$ passed $t$ for computation in block $l$.
 In the schemes for the neural network, the identity morphism and grouping morphisms are omitted for brevity and clarity, leaving only the computationally meaningful morphism $f$.
 
-#### 4.3.2.1. Functor $𝒰: 𝓜 \Rightarrow 𝓜_{mem}$
+#### 4.3.2.1. Functor $𝒰: 𝓜 \rightarrow 𝓜_{mem}$
 
-The categorical scheme $𝓜_{mem}$ can be constructed from $𝓜$ using a functor $𝒰: 𝓜 \Rightarrow 𝓜_{mem}$ with the following transformations of objects and morphisms:
+The categorical scheme $𝓜_{mem}$ can be constructed from $𝓜$ using a functor $𝒰: 𝓜 \rightarrow 𝓜_{mem}$ with the following transformations of objects and morphisms:
 
-$$ 𝒰_1(l \times t)=x \times t^{l-1} \times t $$
+$𝒰_1(l \times t)=x \times t^{l-1} \times t$
 
 $𝒰_2(+1 \times f)$ translates morphism from $𝓜$ into a diagram with groupings morphism as described above. Formally, this can be written as:
 
@@ -153,4 +153,53 @@ This can be shown by representing a morphism from $x$ to the tensor $t$ at the o
 In general, the tensor at the output of the block number $l$, if this is not a checkpoint, is computed as several steps from the nearest previous checkpoint. Represent $l$ as a sum $l=k*L+i$, where $k \in ℕ \cup \{0\}$, $0 \leq i < \sqrt{L}$.
 
 The morphism $f_l$ is presented as a decomposition $f_l=f_i \circ pr_2 \circ ∆ \circ f_{k*\sqrt{L}}$. Here, the morphism $f_{k*\sqrt{L}}$ goes from the input tensor $x$ to the tensor $ch$, which will be saved as a checkpoint, and the morphism $f_i$ goes from the checkpoint to the tensor $t$. Morphism $∆$ copies the checkpoint for saving, and the projection $pr_2$ directs the checkpoint for computation in the next block. Similarly, the morphism for the layer label $+l$ is represented as a decomposition $+l=(+i) \circ (+k*\sqrt{L})$
+
+#### 4.5.2. Memory state during computations with checkpoints
+
+Saving checkpoints can be depicted in the categorical diagram $𝓜_{gch \textunderscore mem}$ for executing an LLM with gradient checkpointing.
+
+<img width="401" alt="Example" src="https://github.com/vieteio/articles/assets/800129/c520845b-e9e0-4c4f-9205-184480e9444a">
+
+<img width="473" alt="General schema" src="https://github.com/vieteio/articles/assets/800129/98345195-467f-405e-9b7d-8fb501df1f78">
+
+The general diagram $𝓜_{gch \textunderscore mem}$ shows the memory state after execution block $l$. Only checkpoints and the last computed tensor $t$ are saved, intermediate tensors are deleted, freeing up memory.
+
+The functor $𝒰_{gch}: 𝓜_{gch} \rightarrow 𝓜_{gch \textunderscore mem}$ and the inverse functor $𝒰_{gch}^{-1}$ can be described similarly to functors $𝒰$ and $𝒰^{-1}$.
+
+#### 4.5.3. Backpropagation
+
+Consider that in gradient checkpointing, the morphism $f_l$ to the tensor at the output of block $l$ decomposes: $f_l=f_i \circ pr_2 \circ ∆ \circ f_{k * \sqrt{L}}$. During the backward step, the saved checkpoint will be used, i.e. projection $pr_2$ needs to be replaced with $pr_1$. The functor for backpropagation $ℒ$ in gradient checkpointing should translate the morphism $f_i \circ pr_2 \circ∆ \circ f_{k * \sqrt{L}}$ for the tensor $t$ into morphism $f_i \circ pr_1 \circ ∆ \circ f_{k * \sqrt{L}}$.
+
+Since during backpropagation, computations along the blocks go in the reverse order, if a tensort at the output of block $l=i + k * \sqrt{L}$ is computed, then all previous $i-1$ computed tensors from the last checkpoint should be saved, as they will be needed in the next backward steps. Thus, the functor $ℒ$ for backpropagation in gradient checkpointing should translate the object $x \times ch^k \times t$ at the output of block $l=i + k*\sqrt{L}$ to object $x \times ch^k \times t^{i-1} \times t$.
+
+### 4.6. Parallel pipeline
+
+In parallel pipeline, the batch is divided into $GPUn$ parts where $GPUn$ is the number of GPUs in the computer. The blocks of the LLM model are also divided into $GPUn$ sequential groups, each of $L/GPUn$ blocks. The weights of each group of blocks are loaded onto their respective GPUs card. Each batch part is then sequentially processed through the layers on different GPUs. While one part of the batch is being processed, other parts are executed on other GPUs or wait idle until a GPU becomes available for computation.
+
+The morphism of executing a whole batch in parallel pipeline is a Cartesian product of morphisms $f$ - executing batch parts on GPUs, or $id$ - the identity idle batch morphism. While each batch part is idle or is being processed on its GPU, passing through blocks on that GPU, the configuration of batch distribution across GPUs remains unchanged. Morphisms of execution (or idleness) of batches in one configuration can be combined into a composition. We obtain a composition of several morphisms $f$ into the morphism $f_{L/GPUn}$ and several $id$ morphisms into $id$ morphism.
+
+Below is an example of a parallel pipeline operation scheme.
+
+<img width="661" alt="Parallel pipeline" src="https://github.com/vieteio/articles/assets/800129/6a0aa383-c6a4-40ea-bae0-99eea26d91bf">
+
+The initial state - input $x^{bs}$ is divided into parts $x^{bs/GPUn}$. The example separately highlights the first two parts, while the remaining {GPUn-2} parts are grouped into {x^{bs/GPUn*(GPUn - 2)}$.
+The computation time of one batch part on a GPU is calculated using the metric of the number of computations on one GPU: $T_{c \textunderscore bs/GPUn}=T_c*bs/GPUn$. The computation time for $L/GPUn$ layers $T_{c \textunderscore bs/GPUn \textunderscore L/GPUn}=(L/GPUn)*T_c*(bs/GPUn)$. During this time, batch parts are computed in parallel on all GPUs or idle. Thus, in the first run through the first $L/GPUn$ layers, computation in Transformer blocks is performed only for the first batch part. For the other parts, the identity $id$ transformation is performed.
+
+<img width="594" alt="Batch part computation" src="https://github.com/vieteio/articles/assets/800129/fb13e30d-dd7d-4e24-a00a-b22bd2e8d4c5">
+
+After computing $L$ layers on GPUn groups with $L/GPUn$ layers per group for the first batch part, the computation ends with obtaining the final tensors $y$. For the other batch parts, only intermediate tensors $t$ are yet computed.
+
+<img width="860" alt="First batch part full model computation" src="https://github.com/vieteio/articles/assets/800129/7516fd2a-7cd7-47d1-8d70-d584eacaef47">
+
+Computations continue for the time of $GPUn-1$ groups, i.e. for the time $(GPUn-1) * T_{c \textunderscore bs \textunderscore L/GPUn}=(L-1) * \frac{(GPUn-1)}{GPU} * T_c*(bs/GPUn)$. The total computation time will be $T_{forward}=(L + (L-1) * \frac{(GPUn-1)}{GPU}) * T_c*(bs/GPUn)$.
+
+#### 4.6.1. Backpropagation
+
+The functor $ℒ$ translates forward computation into backward, i.e. morphism $f_L$ is transferred into $backward_L$. Morphisms of waiting are translated into morphisms of waiting for the backward step:
+
+$ℒ(id_{GPUn-b} \circ f_L \circ id_{b-1})=id_{b-1} \circ backward_L \circ id_{GPUn-b}.$
+
+$ℒ(T_c * bs/GPUn)=ℒ(T_b*bs/GPUn)$, where $T_b$ is the execution time of the backward step on the tensor $t$.
+
+
 
