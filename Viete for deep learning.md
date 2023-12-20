@@ -182,8 +182,8 @@ Below is an example of a parallel pipeline operation scheme.
 
 <img width="661" alt="Parallel pipeline" src="https://github.com/vieteio/articles/assets/800129/6a0aa383-c6a4-40ea-bae0-99eea26d91bf">
 
-The initial state - input $x^{bs}$ is divided into parts $x^{bs/GPUn}$. The example separately highlights the first two parts, while the remaining {GPUn-2} parts are grouped into {x^{bs/GPUn*(GPUn - 2)}$.
-The computation time of one batch part on a GPU is calculated using the metric of the number of computations on one GPU: $T_{c \textunderscore bs/GPUn}=T_c*bs/GPUn$. The computation time for $L/GPUn$ layers $T_{c \textunderscore bs/GPUn \textunderscore L/GPUn}=(L/GPUn)*T_c*(bs/GPUn)$. During this time, batch parts are computed in parallel on all GPUs or idle. Thus, in the first run through the first $L/GPUn$ layers, computation in Transformer blocks is performed only for the first batch part. For the other parts, the identity $id$ transformation is performed.
+The initial state - input $x^{bs}$ is divided into parts $x^{bs/GPUn}$. The example separately highlights the first two parts, while the remaining ${GPUn-2}$ parts are grouped into $x^{bs/GPUn * (GPUn - 2)}$.
+The computation time of one batch part on a GPU is calculated using the metric of the number of computations on one GPU: $T_{c \textunderscore bs/GPUn}=T_c * bs/GPUn$. The computation time for $L/GPUn$ layers $T_{c \textunderscore bs/GPUn \textunderscore L/GPUn}=(L/GPUn) * T_c*(bs/GPUn)$. During this time, batch parts are computed in parallel on all GPUs or idle. Thus, in the first run through the first $L/GPUn$ layers, computation in Transformer blocks is performed only for the first batch part. For the other parts, the identity $id$ transformation is performed.
 
 <img width="594" alt="Batch part computation" src="https://github.com/vieteio/articles/assets/800129/fb13e30d-dd7d-4e24-a00a-b22bd2e8d4c5">
 
@@ -201,7 +201,7 @@ $ℒ(id_{GPUn-b} \circ f_L \circ id_{b-1})=id_{b-1} \circ backward_L \circ id_{G
 
 $ℒ(T_c * bs/GPUn)=ℒ(T_b*bs/GPUn)$, where $T_b$ is the execution time of the backward step on the tensor $t$.
 
-##5. Functors for applying optimizations to LLM models
+## 5. Functors for applying optimizations to LLM models
 
 ### 5.1 Our approach
 A functor $𝓕$ is a mapping of objects and morphisms from one category to another (preserving commutative diagrams). It consists of a pair of mappings - for objects and for morphisms of a category.
