@@ -137,7 +137,7 @@ Accurately calculating the actual computation time is difficult due to many fact
 
 **Note.** The unit of measurement for the number of computational operations can be FLOP. The number of operations can be converted to execution time (with certain accuracy) through FLOPS, known for the GPU.
 
-With the accepted metric (the number of computational operations), let’s denote the computation time of a Transformer block on a single GPU on the input tensor $t$ as $T_c$. Then computing a batch of size $bs$ requires $bs$ times more computations: $T_{c \textunderscore bs}=T_c * bs$. Computing $l$ consecutive Transformer blocks on the input $x$ requires $l * T_c * bs$ operations. This is reflected in the categorical scheme.
+With the accepted metric (the number of computational operations), let’s denote the computation time of a Transformer block on a single GPU on the input tensor $t$ as $T_c$. Then computing a batch of size $bs$ requires $bs$ times more computations: $T_{c \textunderscore bs}=T_c * bs$. Computing $l$ consecutive Transformer blocks on the input $x^{bs}$ requires $l * T_c * bs$ operations. This is reflected in the categorical scheme.
 
 ### 4.5. Gradient checkpointing
 #### 4.5.1. Decomposition of the computation of $l$ layers into computation up to the checkpoint and after
