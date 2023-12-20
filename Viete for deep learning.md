@@ -122,3 +122,35 @@ The inverse functor $𝒰^{-1}$, operating from $𝓜$ to $𝓜_{mem}$, can also
 #### 4.3.2. Backpropagation
 
 During the backpropagation stage, gradients are computed using the tensors from the forward step. The gradient is computed as $g=backward(g_{previous}, t)$. Here $t$, from a categorical point of view, is a saved copy of the tensor that has been computed by the morphism $pr_1 \circ ∆ \circ f_l$. The functor $ℒ$, constructing the scheme of backward computations based on forward computations, should translate that computed tensor $t$ into the saved copy. Thus, the functor should translate the morphism $pr_2 \circ ∆ \circ f_l$ into morphism $pr_1 \circ ∆ \circ f_l$, $ℒ(pr_2 \circ ∆ \circ f_l)=pr_1 \circ ∆ \circ f_l$.
+
+### 4.4 Batch computations
+
+During model training and often during its execution, data is fed into the neural network in batches, adding a batch dimension to the input tensor. The batch size is not important for gradient checkpoint optimization, but it is important for the parallel pipeline - the batch size should be greater than 1, preferably at least equal to the number of GPUs in the computer.
+
+We describe the categorical scheme of a neural network that takes batches as input. Science batch size affects the computation time, we replace the numbering of the blocks with a computation timestamp.
+
+<img width="516" alt="Batched computations" src="https://github.com/vieteio/articles/assets/800129/3d554a12-8f5e-4061-b3c2-cffbb15bae8d">
+
+The objects in the scheme are a Cartesian product of time - a timestamp from the start of the computation, and a batch of tensors. The block morphism is a Cartesian product of two morphisms: $+time$, which increases the timestamp by the duration of the computation, and $f$, which computes the output batch of tensors of size $bs$.
+
+Accurately calculating the actual computation time is difficult due to many factors - parallelism in computations, different types of memory with varying access speeds in the GPU, delays in transferring data from one memory to another. Therefore, the number of computational operations per GPU can be chosen as a time metric.
+
+**Note.** The unit of measurement for the number of computational operations can be FLOP. The number of operations can be converted to execution time (with certain accuracy) through FLOPS, known for the GPU.
+
+With the accepted metric (the number of computational operations), let’s denote the computation time of a Transformer block on a single GPU on the input tensor $t$ as $T_c$. Then computing a batch of size bs requires bs times more computations: $T_{c\_bs}=T_c*bs$. Computing $l$ consecutive Transformer blocks on the input $x$ requires $l*T_c*bs$ operations. This is reflected in the categorical scheme.
+
+### 4.5. Gradient checkpointing
+#### 4.5.1. Decomposition of the computation of $l$ layers into computation up to the checkpoint and after
+
+In gradient checkpointing, the computation of layer $l$ occurs as the computation of a checkpoint and several layers behind the checkpoint.
+
+This can be shown by representing a morphism from $x$ to the tensor $t$ at the output of block $l$ through the following decomposition in the optimized computation diagram $𝓜_{gch}$:
+
+<img width="460" alt="Gradient checkpointing model" src="https://github.com/vieteio/articles/assets/800129/24de0743-f7c8-4976-8656-493cbe69d090">
+
+**Note.** Checkpoints are computed every $\sqrt{L}$ blocks. Here and below, for simplicity, we assume that $L$ is such that $\sqrt{L}$ is an integer.
+
+In general, the tensor at the output of the block number $l$, if this is not a checkpoint, is computed as several steps from the nearest previous checkpoint. Represent $l$ as a sum $l=k*L+i$, where $k \in ℕ \cup \{0\}$, $0 \leq i < \sqrt{L}$.
+
+The morphism $f_l$ is presented as a decomposition $f_l=f_i \circ pr_2 \circ ∆ \circ f_{k*\sqrt{L}}$. Here, the morphism f_{k*\sqrt{L}} goes from the input tensor $x$ to the tensor $ch$, which will be saved as a checkpoint, and the morphism $f_i$ goes from the checkpoint to the tensor $t$. Morphism $∆$ copies the checkpoint for saving, and the projection $pr_2$ directs the checkpoint for computation in the next block. Similarly, the morphism for the layer label $+l$ is represented as a decomposition $+l=(+i) \circ (+k*\sqrt{L})$
+
