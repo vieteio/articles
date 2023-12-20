@@ -98,7 +98,7 @@ Before the start of computations, only the input tensor $x$ is contained in memo
 
 **Note.** The tensors at the output of the block are stored in memory for later use in backpropagation. Therefore, it is more accurate to say here that the tensor $t$ is not only the value computed by the block, but also all intermediate values computed inside the block, for example in the attention and MLP layers. In a typical implementation of the attention layer, three intermediate attention matrices are computed. The label $t$ here means not the same object as in the section above.
 
-General state at the block output $l$ is the Cartesian product $x \times t^l = x \times t^{l-1} \times t$. The morphism for block $l$ transitions from $x \times t^{l-2} \times t = x \times t^{l-1}$ to $x \times t^{l-1} \times t$. This morphism is the Cartesian product of the identity  morphism for $x$, combinations of morphisms that group $t^{l-2} \times t$ into $t^{l-1}$ and morphism $f$, which computes a new tensor $t$ in the product $t^{l-2} \times t.
+General state at the block output $l$ is the Cartesian product $x \times t^l = x \times t^{l-1} \times t$. The morphism for block $l$ transitions from $x \times t^{l-2} \times t = x \times t^{l-1}$ to $x \times t^{l-1} \times t$. This morphism is the Cartesian product of the identity  morphism for $x$, combinations of morphisms that group $t^{l-2} \times t$ into $t^{l-1}$ and morphism $f$, which computes a new tensor $t$ in the product $t^{l-2} \times t$.
 
 The complete scheme of this Cartesian product is as follows:
 
@@ -115,7 +115,7 @@ $$ 𝒰_1(l \times t)=x \times t^{l-1} \times t $$
 
 $𝒰_2(+1 \times f)$ translates morphism from $𝓜$ into a diagram with groupings morphism as described above. Formally, this can be written as:
 
-$ 𝒰_2(+1 \times f)=1_x \times (1_{t^{l-2}} \times (pr_1 \circ ∆)) \times f \circ pr_2 \circ ∆ $. Recall that here $f$ is an abbreviation for f_{w_l}.
+$𝒰_2(+1 \times f)=1_x \times (1_{t^{l-2}} \times (pr_1 \circ ∆)) \times f \circ pr_2 \circ ∆$. Recall that here $f$ is an abbreviation for $f_{w_l}$.
 
 The inverse functor $𝒰^{-1}$, operating from $𝓜$ to $𝓜_{mem}$, can also be considered.
 
@@ -137,7 +137,7 @@ Accurately calculating the actual computation time is difficult due to many fact
 
 **Note.** The unit of measurement for the number of computational operations can be FLOP. The number of operations can be converted to execution time (with certain accuracy) through FLOPS, known for the GPU.
 
-With the accepted metric (the number of computational operations), let’s denote the computation time of a Transformer block on a single GPU on the input tensor $t$ as $T_c$. Then computing a batch of size bs requires bs times more computations: $T_{c\_bs}=T_c*bs$. Computing $l$ consecutive Transformer blocks on the input $x$ requires $l*T_c*bs$ operations. This is reflected in the categorical scheme.
+With the accepted metric (the number of computational operations), let’s denote the computation time of a Transformer block on a single GPU on the input tensor $t$ as $T_c$. Then computing a batch of size $bs$ requires $bs$ times more computations: $T_{c \textunderscore bs}=T_c * bs$. Computing $l$ consecutive Transformer blocks on the input $x$ requires $l * T_c * bs$ operations. This is reflected in the categorical scheme.
 
 ### 4.5. Gradient checkpointing
 #### 4.5.1. Decomposition of the computation of $l$ layers into computation up to the checkpoint and after
@@ -152,5 +152,5 @@ This can be shown by representing a morphism from $x$ to the tensor $t$ at the o
 
 In general, the tensor at the output of the block number $l$, if this is not a checkpoint, is computed as several steps from the nearest previous checkpoint. Represent $l$ as a sum $l=k*L+i$, where $k \in ℕ \cup \{0\}$, $0 \leq i < \sqrt{L}$.
 
-The morphism $f_l$ is presented as a decomposition $f_l=f_i \circ pr_2 \circ ∆ \circ f_{k*\sqrt{L}}$. Here, the morphism f_{k*\sqrt{L}} goes from the input tensor $x$ to the tensor $ch$, which will be saved as a checkpoint, and the morphism $f_i$ goes from the checkpoint to the tensor $t$. Morphism $∆$ copies the checkpoint for saving, and the projection $pr_2$ directs the checkpoint for computation in the next block. Similarly, the morphism for the layer label $+l$ is represented as a decomposition $+l=(+i) \circ (+k*\sqrt{L})$
+The morphism $f_l$ is presented as a decomposition $f_l=f_i \circ pr_2 \circ ∆ \circ f_{k*\sqrt{L}}$. Here, the morphism $f_{k*\sqrt{L}}$ goes from the input tensor $x$ to the tensor $ch$, which will be saved as a checkpoint, and the morphism $f_i$ goes from the checkpoint to the tensor $t$. Morphism $∆$ copies the checkpoint for saving, and the projection $pr_2$ directs the checkpoint for computation in the next block. Similarly, the morphism for the layer label $+l$ is represented as a decomposition $+l=(+i) \circ (+k*\sqrt{L})$
 
