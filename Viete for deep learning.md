@@ -1,8 +1,8 @@
-# Viete for deep learning
+# Composable optimizations for LLMs
 
 ## 1. Abstract
 
-Category theory offers a visual mathematical language for describing arbitrary structures, providing better capabilities for describing project structure and code than industrial languages ​​and development environments. Viete addresses 	the problem of adapting category theory and, through a series of examples, reveals the capabilities of language in application to various tasks. This article proposes a categorical DL Ops solution for implementing optimizations in decoder-only LLM models.
+Category theory offers a visual mathematical language for describing arbitrary structures, providing better capabilities for describing project structure and code than industrial languages ​​and development environments. Viete addresses	the problem of adapting category theory and, through a series of examples, reveals the capabilities of language in application to various tasks. This article proposes a categorical DL Ops solution for implementing optimizations in decoder-only LLM models.
 
 ## 2. Introduction
 
